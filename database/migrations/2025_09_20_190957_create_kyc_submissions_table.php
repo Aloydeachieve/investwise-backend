@@ -14,10 +14,11 @@ return new class extends Migration
         Schema::create('kyc_submissions', function (Blueprint $table) {
             $table->id();
             $table->foreignId('user_id')->constrained()->onDelete('cascade');
-            $table->enum('document_type', ['passport', 'driver_license', 'national_id', 'proof_of_address', 'utility_bill', 'bank_statement']);
+            $table->string('document_type', 50)->change();
             $table->string('document_file');
             $table->enum('status', ['pending', 'approved', 'rejected'])->default('pending');
             $table->text('rejection_reason')->nullable();
+            $table->json('meta')->nullable(); // Store extra fields like NIN number, DOB, etc.
             $table->timestamp('submitted_at');
             $table->timestamp('reviewed_at')->nullable();
             $table->foreignId('reviewed_by')->nullable()->constrained('users')->onDelete('set null');
@@ -33,6 +34,18 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('kyc_submissions');
+        Schema::table('kyc_submissions', function (Blueprint $table) {
+            // If you ever need to roll back, restore the enum
+            $table->enum('document_type', [
+                'passport',
+                'driver_license',
+                'national_id',
+                'proof_of_address',
+                'utility_bill',
+                'bank_statement',
+                'nin',
+                'bvn'
+            ])->change();
+        });
     }
 };

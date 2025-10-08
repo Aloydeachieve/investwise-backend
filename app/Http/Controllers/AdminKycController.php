@@ -9,6 +9,9 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Storage;
+use Symfony\Component\HttpFoundation\Response;
+use App\Http\Requests\ApproveKycRequest;
+use App\Http\Requests\RejectKycRequest;
 
 class AdminKycController extends Controller
 {
@@ -39,6 +42,8 @@ class AdminKycController extends Controller
                     'email' => $submission->user->email,
                 ],
                 'document_type' => $submission->document_type,
+                'status' => $submission->status, // 👈 add this
+                'meta' => $submission->meta,
                 'submitted_at' => $submission->submitted_at->toISOString(),
                 'document_url' => route('admin.kyc.download', $submission->id),
             ];
@@ -58,6 +63,85 @@ class AdminKycController extends Controller
         ]);
     }
 
+    public function approved(Request $request): JsonResponse
+    {
+        $perPage = $request->get('per_page', 15);
+        $page = $request->get('page', 1);
+
+        $approvedSubmissions = KycSubmission::with(['user', 'reviewer'])
+            ->where('status', 'approved')
+            ->orderBy('submitted_at', 'desc')
+            ->paginate($perPage, ['*'], 'page', $page);
+
+        $formattedSubmissions = $approvedSubmissions->getCollection()->map(function ($submission) {
+            return [
+                'id' => $submission->id,
+                'user' => [
+                    'id' => $submission->user->id,
+                    'name' => $submission->user->name,
+                    'email' => $submission->user->email,
+                ],
+                'document_type' => $submission->document_type,
+                'status' => $submission->status, // 👈 add this
+                'meta' => $submission->meta,
+                'submitted_at' => $submission->submitted_at->toISOString(),
+                'document_url' => route('admin.kyc.download', $submission->id),
+            ];
+        });
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'submissions' => $formattedSubmissions,
+                'pagination' => [
+                    'current_page' => $approvedSubmissions->currentPage(),
+                    'last_page' => $approvedSubmissions->lastPage(),
+                    'per_page' => $approvedSubmissions->perPage(),
+                    'total' => $approvedSubmissions->total(),
+                ]
+            ]
+        ]);
+    }
+
+    public function all(Request $request): JsonResponse
+    {
+        $perPage = $request->get('per_page', 15);
+        $page = $request->get('page', 1);
+
+        $allSubmissions = KycSubmission::with(['user', 'reviewer'])
+            ->orderBy('submitted_at', 'desc')
+            ->paginate($perPage, ['*'], 'page', $page);
+
+        $formattedSubmissions = $allSubmissions->getCollection()->map(function ($submission) {
+            return [
+                'id' => $submission->id,
+                'user' => [
+                    'id' => $submission->user->id,
+                    'name' => $submission->user->name,
+                    'email' => $submission->user->email,
+                ],
+                'document_type' => $submission->document_type,
+                'status' => $submission->status,
+                'meta' => $submission->meta,
+                'submitted_at' => $submission->submitted_at->toISOString(),
+                'document_url' => route('admin.kyc.download', $submission->id),
+            ];
+        });
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'submissions' => $formattedSubmissions,
+                'pagination' => [
+                    'current_page' => $allSubmissions->currentPage(),
+                    'last_page' => $allSubmissions->lastPage(),
+                    'per_page' => $allSubmissions->perPage(),
+                    'total' => $allSubmissions->total(),
+                ]
+            ]
+        ]);
+    }
+
     public function show($id): JsonResponse
     {
         $submission = KycSubmission::with(['user', 'reviewer'])->findOrFail($id);
@@ -70,14 +154,20 @@ class AdminKycController extends Controller
                     'id' => $submission->user->id,
                     'name' => $submission->user->name,
                     'email' => $submission->user->email,
+                    'phone' => $submission->user->phone ?? null,
+                    'address' => $submission->user->address ?? null,
                 ],
                 'document_type' => $submission->document_type,
+                'meta' => $submission->meta,
                 'status' => $submission->status,
                 'submitted_at' => $submission->submitted_at->toISOString(),
                 'reviewed_at' => $submission->reviewed_at?->toISOString(),
                 'rejection_reason' => $submission->rejection_reason,
                 'reviewed_by' => $submission->reviewer?->name,
+
+                // 👇 Add both metadata URL and direct preview URL
                 'document_url' => route('admin.kyc.download', $submission->id),
+                // 'document_preview_url' => route('admin.kyc.download', ['id' => $submission->id, 'preview' => 1]),
             ]
         ]);
     }
@@ -188,20 +278,40 @@ class AdminKycController extends Controller
         ]);
     }
 
-    public function download($id): JsonResponse
+    public function download(Request $request, $id)
     {
         $submission = KycSubmission::findOrFail($id);
 
-        // Check if file exists
-        if (!Storage::disk('private')->exists($submission->document_file)) {
+        if (!$submission->document_file || !Storage::disk('private')->exists($submission->document_file)) {
             return response()->json([
                 'success' => false,
                 'message' => 'Document file not found'
             ], 404);
         }
 
-        // For private files, we'll return the file path and let the frontend handle the download
-        // In a production environment, you might want to use Laravel's signed URLs or a different approach
+        // ✅ Allow public preview (raw file stream)
+        if ($request->has('preview')) {
+            $mimeType = Storage::disk('private')->mimeType($submission->document_file);
+            $stream = Storage::disk('private')->readStream($submission->document_file);
+
+            return response()->stream(function () use ($stream) {
+                fpassthru($stream);
+            }, 200, [
+                "Content-Type" => $mimeType,
+                "Content-Disposition" => "inline; filename=\"" . basename($submission->document_file) . "\"",
+                "Access-Control-Allow-Origin" => "*", // ⚠️ for dev; in prod use your domain
+                "Access-Control-Allow-Headers" => "Authorization, Content-Type",
+            ]);
+        }
+
+        // ✅ Require admin auth for metadata
+        if (!$request->user() || !$request->user()->is_admin) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Unauthorized'
+            ], 403);
+        }
+
         return response()->json([
             'success' => true,
             'data' => [
@@ -209,7 +319,7 @@ class AdminKycController extends Controller
                 'document_type' => $submission->document_type,
                 'filename' => basename($submission->document_file),
                 'file_path' => $submission->document_file,
-                'note' => 'For security reasons, documents must be accessed through the admin panel interface',
+                'note' => 'Use ?preview=1 to view document'
             ]
         ]);
     }

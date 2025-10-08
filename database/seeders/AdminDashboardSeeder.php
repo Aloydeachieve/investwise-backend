@@ -19,6 +19,7 @@ class AdminDashboardSeeder extends Seeder
     /**
      * Run the database seeds.
      */
+    
     public function run(): void
     {
         // Create admin user if not exists

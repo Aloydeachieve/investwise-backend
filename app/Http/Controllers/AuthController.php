@@ -14,6 +14,11 @@ use App\Http\Requests\LoginRequest;
 use App\Http\Requests\UpdateProfileRequest;
 use App\Http\Requests\ForgotPasswordRequest;
 use App\Http\Requests\ResetPasswordRequest;
+use App\Helpers\ApiResponse;
+use App\Models\KycSubmission;
+use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Log;
+
 
 class AuthController extends Controller
 {
@@ -32,11 +37,16 @@ class AuthController extends Controller
 
         $token = $user->createToken('auth_token')->plainTextToken;
 
-        return response()->json([
-            'message' => 'User registered successfully',
-            'user' => $user,
+        // Attach KYC status
+        $userData = $user->toArray();
+        $userData['kyc_status'] = KycSubmission::where('user_id', $user->id)
+            ->latest('id')
+            ->value('status') ?? 'not_submitted';
+
+        return ApiResponse::success([
+            'user' => $userData,
             'token' => $token,
-        ], 201);
+        ], 'User registered successfully', 201);
     }
 
     /**
@@ -44,20 +54,33 @@ class AuthController extends Controller
      */
     public function login(LoginRequest $request)
     {
-        if (!Auth::attempt($request->only('email', 'password'))) {
+        $user = User::where('email', $request->email)->first();
+
+        if (!$user || !Hash::check($request->password, $user->password)) {
             throw ValidationException::withMessages([
                 'email' => ['The provided credentials are incorrect.'],
             ]);
         }
 
-        $user = User::where('email', $request->email)->firstOrFail();
+        // Check if user is active
+        if ($user->status !== 'active') {
+            throw ValidationException::withMessages([
+                'email' => ['Your account is not active. Please contact support.'],
+            ]);
+        }
+
         $token = $user->createToken('auth_token')->plainTextToken;
 
-        return response()->json([
-            'message' => 'Login successful',
-            'user' => $user,
+        // Attach KYC status
+        $userData = $user->toArray();
+        $userData['kyc_status'] = KycSubmission::where('user_id', $user->id)
+            ->latest('id')
+            ->value('status') ?? 'not_submitted';
+
+        return ApiResponse::success([
+            'user' => $userData,
             'token' => $token,
-        ]);
+        ], 'Login successful');
     }
 
     /**
@@ -67,9 +90,7 @@ class AuthController extends Controller
     {
         $request->user()->currentAccessToken()->delete();
 
-        return response()->json([
-            'message' => 'Logged out successfully',
-        ]);
+        return ApiResponse::success(null, 'Logged out successfully');
     }
 
     /**
@@ -77,9 +98,28 @@ class AuthController extends Controller
      */
     public function profile(Request $request)
     {
-        return response()->json([
-            'user' => $request->user(),
-        ]);
+        $user = $request->user();
+        $token = $user->createToken('auth_token')->plainTextToken;
+
+        return ApiResponse::success([
+            'user' => $user,
+            'token' => $token,
+        ], 'Profile retrieved successfully');
+    }
+
+    /**
+     * Refresh user token
+     * This helps maintain user context after verification processes
+     */
+    public function refreshToken(Request $request)
+    {
+        $user = $request->user();
+        $newToken = $user->createToken('auth_token')->plainTextToken;
+
+        return ApiResponse::success([
+            'user' => $user,
+            'token' => $newToken,
+        ], 'Token refreshed successfully');
     }
 
     /**
@@ -96,10 +136,9 @@ class AuthController extends Controller
             ]);
         }
 
-        return response()->json([
-            'message' => 'Profile updated successfully',
+        return ApiResponse::success([
             'user' => $user,
-        ]);
+        ], 'Profile updated successfully');
     }
 
     /**
@@ -112,9 +151,7 @@ class AuthController extends Controller
         );
 
         if ($status === Password::RESET_LINK_SENT) {
-            return response()->json([
-                'message' => 'Password reset link sent to your email address.',
-            ]);
+            return ApiResponse::success(null, 'Password reset link sent to your email address.');
         } else {
             throw ValidationException::withMessages([
                 'email' => ['Unable to send password reset link.'],
@@ -141,13 +178,109 @@ class AuthController extends Controller
         );
 
         if ($status === Password::PASSWORD_RESET) {
-            return response()->json([
-                'message' => 'Password reset successfully.',
-            ]);
+            return ApiResponse::success(null, 'Password reset successfully.');
         } else {
             throw ValidationException::withMessages([
                 'email' => ['Unable to reset password.'],
             ]);
+        }
+    }
+
+    // 🔹 List Users
+    public function activeUsers()
+    {
+        $users = User::where('status', 'active')->get();
+        return ApiResponse::success($users, 'Active users retrieved successfully');
+    }
+
+    public function inactiveUsers()
+    {
+        $users = User::where('status', 'inactive')->get();
+        return ApiResponse::success($users, 'Inactive users retrieved successfully');
+    }
+
+    public function suspendedUsers()
+    {
+        $users = User::where('status', 'suspended')->get();
+        return ApiResponse::success($users, 'Suspended users retrieved successfully');
+    }
+
+    public function allUsers()
+    {
+        $users = User::all();
+        return ApiResponse::success($users, 'All users retrieved successfully');
+    }
+
+    // 🔹 Create new user
+    public function createUser(Request $request)
+    {
+        $validated = $request->validate([
+            'name' => 'required|string',
+            'email' => 'required|email|unique:users',
+            'password' => 'required|string|min:6',
+            'role' => 'nullable|string|in:user,admin'
+        ]);
+
+        $user = User::create([
+            'name' => $validated['name'],
+            'email' => $validated['email'],
+            'password' => Hash::make($validated['password']),
+            'role' => $validated['role'] ?? 'user',
+            'status' => 'active'
+        ]);
+
+        return ApiResponse::success($user, 'User created successfully', 201);
+    }
+
+    // 🔹 Delete user
+    public function deleteUser(User $user)
+    {
+        $user->delete();
+        return ApiResponse::success(null, 'User deleted successfully');
+    }
+
+    // 🔹 Send email to user
+    public function sendEmail(Request $request, User $user)
+    {
+        try {
+            // Check if user is authenticated and is admin
+            if (!$request->user() || $request->user()->role !== 'admin') {
+                return ApiResponse::error('Unauthorized', 403);
+            }
+
+            // Validate required parameters
+            $validated = $request->validate([
+                'subject' => 'required|string|max:255',
+                'message' => 'required|string'
+            ]);
+
+            // Prepare email data
+            $emailData = [
+                'subject' => $validated['subject'],
+                'message' => $validated['message'],
+                'recipient_name' => $user->name,
+                'recipient_email' => $user->email
+            ];
+
+            // Send email using CustomNotificationMail
+            Mail::to($user->email)->send(new \App\Mail\CustomNotificationMail($emailData));
+
+            // Log successful email sending
+            Log::info("Email sent successfully to {$user->email}", [
+                'subject' => $validated['subject'],
+                'recipient_id' => $user->id
+            ]);
+
+            return ApiResponse::success([
+                'recipient' => $user->email,
+                'subject' => $validated['subject']
+            ], 'Email sent successfully');
+        } catch (\Exception $e) {
+            Log::error("Email error: " . $e->getMessage(), [
+                'recipient' => $user->email ?? 'unknown',
+                'error' => $e->getTraceAsString()
+            ]);
+            return ApiResponse::error('Failed to send email: ' . $e->getMessage(), 500);
         }
     }
 
@@ -160,10 +293,9 @@ class AuthController extends Controller
 
         $user->update(['status' => 'suspended']);
 
-        return response()->json([
-            'message' => 'User suspended successfully',
+        return ApiResponse::success([
             'user' => $user,
-        ]);
+        ], 'User suspended successfully');
     }
 
     /**
@@ -175,9 +307,23 @@ class AuthController extends Controller
 
         $user->update(['status' => 'active']);
 
-        return response()->json([
-            'message' => 'User unsuspended successfully',
+        return ApiResponse::success([
             'user' => $user,
+        ], 'User unsuspended successfully');
+    }
+
+    // 🔹 Get User Details with Relationships
+    public function getUserDetails($id)
+    {
+        $user = User::with([
+            'transactions',
+            'investments',
+            'referrals',
+            'activities',
+        ])->findOrFail($id);
+
+        return response()->json([
+            'data' => $user
         ]);
     }
 }

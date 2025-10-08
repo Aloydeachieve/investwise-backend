@@ -34,6 +34,12 @@ use App\Http\Controllers\DashboardController;
 |
 */
 
+
+// In routes/api.php
+Route::options('/{any}', function () {
+    return response('', 200);
+})->where('any', '.*');
+
 // Public authentication routes
 Route::prefix('auth')->group(function () {
     Route::post('/register', [AuthController::class, 'register']);
@@ -47,11 +53,23 @@ Route::middleware('auth:sanctum')->prefix('auth')->group(function () {
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::get('/profile', [AuthController::class, 'profile']);
     Route::put('/profile', [AuthController::class, 'updateProfile']);
+    Route::post('/refresh-token', [AuthController::class, 'refreshToken']);
 
     // Admin routes for user management
     Route::middleware('admin')->group(function () {
+        Route::get('/users/active', [AuthController::class, 'activeUsers']);
+        Route::get('/users/inactive', [AuthController::class, 'inactiveUsers']);
+        Route::get('/users/suspended', [AuthController::class, 'suspendedUsers']);
+        Route::get('/users/all', [AuthController::class, 'allUsers']);
+
+        Route::post('/users/', [AuthController::class, 'createUser']);
+        Route::delete('/users/{user}', [AuthController::class, 'deleteUser']);
+        Route::post('/users/{user}/send-email', [AuthController::class, 'sendEmail']);
+
         Route::put('/users/{user}/suspend', [AuthController::class, 'suspendUser']);
         Route::put('/users/{user}/unsuspend', [AuthController::class, 'unsuspendUser']);
+        // routes/api.php
+        Route::get('/users/{id}', [AuthController::class, 'getUserDetails']);
     });
 });
 
@@ -59,16 +77,27 @@ Route::middleware('auth:sanctum')->prefix('auth')->group(function () {
 Route::middleware('auth:sanctum')->prefix('kyc')->group(function () {
     Route::post('/submit', [KycController::class, 'submit']);
     Route::get('/status', [KycController::class, 'status']);
+    Route::post('/refresh', [KycController::class, 'refresh']);
 });
 
 // Admin KYC routes
+// Allow public preview (no auth middleware for this route)
+Route::get('admin/kyc/{id}/download', [AdminKycController::class, 'download'])->name('admin.kyc.download');
+
+// Auth'd admin-only endpoints
 Route::middleware(['auth:sanctum', 'admin'])->prefix('admin/kyc')->group(function () {
     Route::get('/pending', [AdminKycController::class, 'pending']);
+    Route::get('/approved', [AdminKycController::class, 'approved']);
+    Route::get('/all', [AdminKycController::class, 'all']);
     Route::get('/{id}', [AdminKycController::class, 'show']);
-    Route::get('/{id}/download', [AdminKycController::class, 'download'])->name('admin.kyc.download');
     Route::post('/{id}/approve', [AdminKycController::class, 'approve']);
     Route::post('/{id}/reject', [AdminKycController::class, 'reject']);
+    // IMPORTANT: remove the download route from inside this group!
 });
+
+
+// Route::get('/admin/kyc/{id}/download', [AdminKycController::class, 'download'])->name('admin.kyc.download');
+
 
 // Investment Plans & Transactions Routes
 
@@ -157,6 +186,19 @@ Route::middleware(['auth:sanctum', 'admin'])->prefix('admin/dashboard')->group(f
     Route::get('/users', [AdminDashboardController::class, 'users']);
     Route::get('/finance', [AdminDashboardController::class, 'finance']);
 });
+
+// // Admin User Management Routes
+// Route::middleware(['auth:sanctum', 'admin'])->prefix('admin')->group(function () {
+//     Route::get('/users/all', [AuthController::class, 'allUsers']);
+//     Route::get('/users/active', [AuthController::class, 'activeUsers']);
+//     Route::get('/users/inactive', [AuthController::class, 'inactiveUsers']);
+//     Route::get('/users/suspended', [AuthController::class, 'suspendedUsers']);
+//     Route::post('/users', [AuthController::class, 'createUser']);
+//     Route::delete('/users/{user}', [AuthController::class, 'deleteUser']);
+//     Route::post('/users/{user}/send-email', [AuthController::class, 'sendEmail']);
+//     Route::put('/users/{user}/suspend', [AuthController::class, 'suspendUser']);
+//     Route::put('/users/{user}/unsuspend', [AuthController::class, 'unsuspendUser']);
+// });
 
 // Admin Audit Logs Routes
 Route::middleware(['auth:sanctum', 'admin'])->prefix('admin')->group(function () {

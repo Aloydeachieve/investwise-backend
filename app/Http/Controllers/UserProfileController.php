@@ -17,6 +17,7 @@ use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
 use Carbon\Carbon;
 use PragmaRX\Google2FA\Google2FA;
+use App\Helpers\ApiResponse;
 
 class UserProfileController extends Controller
 {
@@ -46,7 +47,7 @@ class UserProfileController extends Controller
             'two_factor_enabled' => $user->two_factor_enabled,
         ];
 
-        return response()->json([
+        return ApiResponse::success([
             'user' => [
                 'id' => $user->id,
                 'name' => $user->name,
@@ -62,7 +63,7 @@ class UserProfileController extends Controller
                 'updated_at' => $user->updated_at->format('Y-m-d H:i:s'),
             ],
             'activity_summary' => $activitySummary,
-        ]);
+        ], 'Profile retrieved successfully');
     }
 
     /**
@@ -88,10 +89,9 @@ class UserProfileController extends Controller
             'ip_address' => $request->ip(),
         ]);
 
-        return response()->json([
-            'message' => 'Profile updated successfully',
+        return ApiResponse::success([
             'user' => $user,
-        ]);
+        ], 'Profile updated successfully');
     }
 
     /**
@@ -104,15 +104,11 @@ class UserProfileController extends Controller
 
         // Verify current email and password
         if ($request->current_email !== $user->email) {
-            return response()->json([
-                'message' => 'Current email does not match your account',
-            ], 400);
+            return ApiResponse::error('Current email does not match your account', 400);
         }
 
         if (!Hash::check($request->password, $user->password)) {
-            return response()->json([
-                'message' => 'Current password is incorrect',
-            ], 400);
+            return ApiResponse::error('Current password is incorrect', 400);
         }
 
         // Generate verification token
@@ -145,13 +141,9 @@ class UserProfileController extends Controller
                 'ip_address' => $request->ip(),
             ]);
 
-            return response()->json([
-                'message' => 'Verification email sent to your new email address. Please check your inbox and click the verification link.',
-            ]);
+            return ApiResponse::success(null, 'Verification email sent to your new email address. Please check your inbox and click the verification link.');
         } catch (\Exception $e) {
-            return response()->json([
-                'message' => 'Failed to send verification email. Please try again.',
-            ], 500);
+            return ApiResponse::serverError('Failed to send verification email. Please try again.');
         }
     }
 
@@ -164,9 +156,7 @@ class UserProfileController extends Controller
         $token = $request->query('token');
 
         if (!$token) {
-            return response()->json([
-                'message' => 'Invalid verification token',
-            ], 400);
+            return ApiResponse::error('Invalid verification token', 400);
         }
 
         $user = User::where('email_verification_token', $token)
@@ -174,9 +164,7 @@ class UserProfileController extends Controller
             ->first();
 
         if (!$user) {
-            return response()->json([
-                'message' => 'Invalid or expired verification token',
-            ], 400);
+            return ApiResponse::error('Invalid or expired verification token', 400);
         }
 
         // Update email
@@ -209,13 +197,9 @@ class UserProfileController extends Controller
                 'ip_address' => $request->ip(),
             ]);
 
-            return response()->json([
-                'message' => 'Email address changed successfully',
-            ]);
+            return ApiResponse::success(null, 'Email address changed successfully');
         } catch (\Exception $e) {
-            return response()->json([
-                'message' => 'Email changed but failed to send confirmation email',
-            ], 500);
+            return ApiResponse::serverError('Email changed but failed to send confirmation email');
         }
     }
 
@@ -229,9 +213,7 @@ class UserProfileController extends Controller
 
         // Verify current password
         if (!Hash::check($request->current_password, $user->password)) {
-            return response()->json([
-                'message' => 'Current password is incorrect',
-            ], 400);
+            return ApiResponse::error('Current password is incorrect', 400);
         }
 
         // Update password
@@ -259,9 +241,7 @@ class UserProfileController extends Controller
             'ip_address' => $request->ip(),
         ]);
 
-        return response()->json([
-            'message' => 'Password changed successfully',
-        ]);
+        return ApiResponse::success(null, 'Password changed successfully');
     }
 
     /**
@@ -273,9 +253,7 @@ class UserProfileController extends Controller
         $user = $request->user();
 
         if ($user->two_factor_enabled) {
-            return response()->json([
-                'message' => '2FA is already enabled',
-            ], 400);
+            return ApiResponse::error('2FA is already enabled', 400);
         }
 
         $google2fa = new Google2FA();
@@ -295,11 +273,10 @@ class UserProfileController extends Controller
             'two_factor_secret' => $secret,
         ]);
 
-        return response()->json([
-            'message' => '2FA setup initiated. Please verify the code to complete setup.',
+        return ApiResponse::success([
             'secret' => $secret,
             'qr_code_url' => $qrCodeUrl,
-        ]);
+        ], '2FA setup initiated. Please verify the code to complete setup.');
     }
 
     /**
@@ -311,9 +288,7 @@ class UserProfileController extends Controller
         $user = $request->user();
 
         if (!$user->two_factor_secret) {
-            return response()->json([
-                'message' => '2FA setup not initiated',
-            ], 400);
+            return ApiResponse::error('2FA setup not initiated', 400);
         }
 
         $google2fa = new Google2FA();
@@ -324,9 +299,7 @@ class UserProfileController extends Controller
         );
 
         if (!$valid) {
-            return response()->json([
-                'message' => 'Invalid verification code',
-            ], 400);
+            return ApiResponse::error('Invalid verification code', 400);
         }
 
         // Generate recovery codes
@@ -361,10 +334,9 @@ class UserProfileController extends Controller
             'ip_address' => $request->ip(),
         ]);
 
-        return response()->json([
-            'message' => '2FA enabled successfully',
+        return ApiResponse::success([
             'recovery_codes' => $recoveryCodes,
-        ]);
+        ], '2FA enabled successfully');
     }
 
     /**
@@ -377,9 +349,7 @@ class UserProfileController extends Controller
 
         // Verify password
         if (!Hash::check($request->password, $user->password)) {
-            return response()->json([
-                'message' => 'Password is incorrect',
-            ], 400);
+            return ApiResponse::error('Password is incorrect', 400);
         }
 
         // Verify 2FA code if enabled
@@ -392,9 +362,7 @@ class UserProfileController extends Controller
             );
 
             if (!$valid) {
-                return response()->json([
-                    'message' => 'Invalid 2FA verification code',
-                ], 400);
+                return ApiResponse::error('Invalid 2FA verification code', 400);
             }
         }
 
@@ -425,9 +393,7 @@ class UserProfileController extends Controller
             'ip_address' => $request->ip(),
         ]);
 
-        return response()->json([
-            'message' => '2FA disabled successfully',
-        ]);
+        return ApiResponse::success(null, '2FA disabled successfully');
     }
 
     /**
@@ -460,8 +426,6 @@ class UserProfileController extends Controller
 
         $logs = $query->paginate($request->get('per_page', 15));
 
-        return response()->json([
-            'logs' => $logs,
-        ]);
+        return ApiResponse::paginated($logs, 'Activity logs retrieved successfully');
     }
 }

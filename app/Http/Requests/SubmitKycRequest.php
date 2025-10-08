@@ -3,36 +3,47 @@
 namespace App\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Validator;
 
 class SubmitKycRequest extends FormRequest
 {
-    /**
-     * Determine if the user is authorized to make this request.
-     */
     public function authorize(): bool
     {
-        return $this->user() && $this->user()->is_authenticated();
+        return auth()->check() && auth()->user()->status === 'active';
     }
 
-    /**
-     * Get the validation rules that apply to the request.
-     *
-     * @return array<string, \Illuminate\Contracts\Validation\ValidationRule|array<mixed>|string>
-     */
     public function rules(): array
     {
-        return [
+        $rules = [
             'documents' => 'required|array|min:1|max:5',
-            'documents.*.type' => 'required|in:passport,driver_license,national_id,proof_of_address,utility_bill,bank_statement',
-            'documents.*.file' => 'required|file|mimes:jpg,jpeg,png,pdf|max:5120', // 5MB max
+            'documents.*.type' => 'required|in:passport,driver_license,voters_card,nin,bvn',
+            'nin' => 'nullable|string|size:11',
+            'dob' => 'nullable|date|before:today',
+            'bvn' => 'nullable|string|size:11',
         ];
+
+        // Add file validation rules dynamically based on document types
+        $documents = $this->input('documents', []);
+        foreach ($documents as $index => $document) {
+            $type = $document['type'] ?? '';
+
+            // For BVN, file is not required
+            if ($type === 'bvn') {
+                continue;
+            }
+
+            // For NIN, file is optional but if provided, must be valid
+            if ($type === 'nin') {
+                $rules["documents.$index.file"] = 'nullable|file|mimes:jpg,jpeg,png,pdf|max:5120';
+            } else {
+                // For other document types (passport, driver's license, voter's card), file is required
+                $rules["documents.$index.file"] = 'required|file|mimes:jpg,jpeg,png,pdf|max:5120';
+            }
+        }
+
+        return $rules;
     }
 
-    /**
-     * Get custom messages for validator errors.
-     *
-     * @return array<string, string>
-     */
     public function messages(): array
     {
         return [
@@ -48,11 +59,27 @@ class SubmitKycRequest extends FormRequest
         ];
     }
 
-    /**
-     * Prepare the data for validation.
-     */
-    protected function prepareForValidation(): void
+    public function withValidator(Validator $validator)
     {
-        // Add any data preparation logic here if needed
+        $validator->after(function ($validator) {
+            $types = collect($this->input('documents', []))
+                ->pluck('type')
+                ->toArray();
+
+            if (in_array('nin', $types)) {
+                if (!$this->filled('nin')) {
+                    $validator->errors()->add('nin', 'NIN is required when uploading NIN document.');
+                }
+                if (!$this->filled('dob')) {
+                    $validator->errors()->add('dob', 'Date of Birth is required when uploading NIN document.');
+                }
+            }
+
+            if (in_array('bvn', $types)) {
+                if (!$this->filled('bvn')) {
+                    $validator->errors()->add('bvn', 'BVN is required when uploading BVN document.');
+                }
+            }
+        });
     }
 }

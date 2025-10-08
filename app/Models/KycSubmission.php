@@ -16,6 +16,7 @@ class KycSubmission extends Model
         'document_file',
         'status',
         'rejection_reason',
+        'meta',
         'submitted_at',
         'reviewed_at',
         'reviewed_by',
@@ -24,6 +25,7 @@ class KycSubmission extends Model
     protected $casts = [
         'submitted_at' => 'datetime',
         'reviewed_at' => 'datetime',
+        'meta' => 'array',
     ];
 
     public function user(): BelongsTo
@@ -51,8 +53,8 @@ class KycSubmission extends Model
         return $this->status === 'rejected';
     }
 
-    public function getDocumentUrlAttribute(): string
+    public function getDocumentUrlAttribute(): ?string
     {
-        return asset('storage/' . $this->document_file);
+        return $this->document_file ? asset('storage/' . $this->document_file) : null;
     }
 }
