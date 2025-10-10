@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: investwise-backend
+    env: docker
+    dockerfilePath: ./Dockerfile
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: APP_DEBUG
+        value: false
