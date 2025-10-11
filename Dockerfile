@@ -29,9 +29,8 @@ RUN php artisan config:clear && \
     php artisan route:cache && \
     php artisan view:cache
 
+# Expose port (Railway will override this with $PORT)
+EXPOSE ${PORT:-8000}
 
-# Expose port
-EXPOSE 8000
-
-# Start server
-CMD php artisan migrate --force && php artisan serve --host=0.0.0.0 --port=8000
+# Start server - Use Railway's PORT variable
+CMD php artisan migrate --force && php artisan serve --host=0.0.0.0 --port=${PORT:-8000}
