@@ -1,12 +1,13 @@
 FROM php:8.2-fpm
 
-# Install system dependencies
+# Install system dependencies (added libpq-dev for PostgreSQL)
 RUN apt-get update && apt-get install -y \
     git \
     curl \
     libpng-dev \
     libonig-dev \
     libxml2-dev \
+    libpq-dev \
     zip \
     unzip \
     && docker-php-ext-install pdo_pgsql pdo_mysql mbstring exif pcntl bcmath gd
@@ -24,13 +25,10 @@ COPY . .
 RUN composer install --no-dev --optimize-autoloader --no-interaction
 
 # Generate optimized autoload files
-RUN php artisan config:clear && \
-    php artisan config:cache && \
-    php artisan route:cache && \
-    php artisan view:cache
+RUN php artisan config:clear
 
-# Expose port (Railway will override this with $PORT)
-EXPOSE ${PORT:-8000}
+# Expose port
+EXPOSE 8000
 
-# Start server - Use Railway's PORT variable
-CMD php artisan migrate --force || true && php artisan serve --host=0.0.0.0 --port=${PORT:-8000}
+# Use Railway's PORT environment variable
+CMD sh -c "php artisan migrate --force && php artisan serve --host=0.0.0.0 --port=${PORT:-8000}"
