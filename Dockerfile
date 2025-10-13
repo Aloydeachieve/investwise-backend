@@ -30,5 +30,5 @@ RUN php artisan config:clear
 # Expose port
 EXPOSE 8000
 
-# Use Railway's PORT environment variable
-CMD sh -c "php artisan migrate --force && php artisan serve --host=0.0.0.0 --port=${PORT:-8000}"
+# Start server - migrations optional, server required
+CMD sh -c "php artisan migrate --force || echo 'Migrations skipped' && php artisan serve --host=0.0.0.0 --port=${PORT:-8000}"
