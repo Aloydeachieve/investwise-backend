@@ -23,8 +23,9 @@ return [
         'http://localhost:3000',    // Next.js development
         'http://localhost:3001',    // Alternative Next.js port
         'http://127.0.0.1:3000',   // Alternative localhost format
-        'https://your-frontend-domain.com', // Production domain
-        'https://www.your-frontend-domain.com', // Production domain with www
+        'https://investwise-frontend-8paj.vercel.app',
+        'https://investwise-frontend-8paj-git-main-aloysius-dominics-projects.vercel.app',
+        'https://investwise-frontend-8paj-mag8v2ryu-aloysius-dominics-projects.vercel.app',
     ],
 
     'allowed_origins_patterns' => [
