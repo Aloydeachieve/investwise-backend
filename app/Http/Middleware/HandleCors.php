@@ -25,6 +25,7 @@ class HandleCors
       'http://localhost:3000',
       'http://localhost:3001',
       'http://127.0.0.1:3000',
+      'https://investwise-frontend-8paj.vercel.app',
       'https://investwise-frontend-8paj-git-main-aloysius-dominics-projects.vercel.app',
       'https://investwise-frontend-8paj-mag8v2ryu-aloysius-dominics-projects.vercel.app',
     ];

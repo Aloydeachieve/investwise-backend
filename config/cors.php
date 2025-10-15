@@ -15,7 +15,7 @@ return [
     |
     */
 
-    'paths' => ['api/*', 'sanctum/csrf-cookie'],
+    'paths' => ['api/*', 'sanctum/csrf-cookie', '*'],
 
     'allowed_methods' => ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
 
@@ -29,7 +29,7 @@ return [
     ],
 
     'allowed_origins_patterns' => [
-        '/^https?:\/\/.*\.your-frontend-domain\.com$/', // Subdomains
+        '/\.vercel\.app$/',  // Allow all Vercel preview deployments
     ],
 
     'allowed_headers' => [
