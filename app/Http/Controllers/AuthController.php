@@ -7,7 +7,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Password;
-use Illuminate\Auth\Events\PasswordReset;
+
 use Illuminate\Validation\ValidationException;
 use App\Http\Requests\RegisterRequest;
 use App\Http\Requests\LoginRequest;
@@ -172,8 +172,6 @@ class AuthController extends Controller
                 ])->setRememberToken(str()->random(60));
 
                 $user->save();
-
-                event(new PasswordReset($user));
             }
         );
 
@@ -315,15 +313,17 @@ class AuthController extends Controller
     // 🔹 Get User Details with Relationships
     public function getUserDetails($id)
     {
-        $user = User::with([
-            'transactions',
-            'investments',
-            'referrals',
-            'activities',
-        ])->findOrFail($id);
+        try {
+            $user = User::with([
+                'transactions',
+                'investments',
+                'referralsMade',
+                'activities',
+            ])->findOrFail($id);
 
-        return response()->json([
-            'data' => $user
-        ]);
+            return ApiResponse::success($user, 'User details retrieved successfully.');
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+            return ApiResponse::notFound('User not found.');
+        }
     }
 }

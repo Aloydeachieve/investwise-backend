@@ -113,4 +113,9 @@ class User extends Authenticatable
 
         return $totalDeposits - $totalWithdrawals - $totalPayouts;
     }
+
+    public function activities()
+    {
+        return $this->hasMany(AuditLog::class);
+    }
 }
