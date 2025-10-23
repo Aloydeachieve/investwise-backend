@@ -70,6 +70,8 @@ Route::middleware('auth:sanctum')->prefix('auth')->group(function () {
         Route::put('/users/{user}/unsuspend', [AuthController::class, 'unsuspendUser']);
         // routes/api.php
         Route::get('/users/{id}', [AuthController::class, 'getUserDetails']);
+        Route::put('/users/{user}/verify', [AuthController::class, 'toggleVerification']);
+
     });
 });
 

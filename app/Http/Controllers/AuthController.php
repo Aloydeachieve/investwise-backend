@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\User;
 use Illuminate\Http\Request;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Password;
@@ -18,6 +19,8 @@ use App\Helpers\ApiResponse;
 use App\Models\KycSubmission;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Log;
+use App\Http\Resources\UserResource;
+
 
 
 class AuthController extends Controller
@@ -311,9 +314,10 @@ class AuthController extends Controller
     }
 
     // 🔹 Get User Details with Relationships
-    public function getUserDetails($id)
+ public function getUserDetails($id)
     {
         try {
+            // Eager load relationships for performance
             $user = User::with([
                 'transactions',
                 'investments',
@@ -321,9 +325,30 @@ class AuthController extends Controller
                 'activities',
             ])->findOrFail($id);
 
-            return ApiResponse::success($user, 'User details retrieved successfully.');
+            // Return formatted user resource
+            return ApiResponse::success(
+                new UserResource($user),
+                'User details retrieved successfully.'
+            );
+
         } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
             return ApiResponse::notFound('User not found.');
+        } catch (\Exception $e) {
+            return ApiResponse::error('An unexpected error occurred: ' . $e->getMessage());
         }
+    }
+
+    /**     * Admin: Update User Role
+     */
+    public function toggleVerification(User $user, Request $request): JsonResponse
+    {
+        $user->update([
+            'email_verified_at' => $request->verified ? now() : null,
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => $request->verified ? 'User verified successfully' : 'User unverified successfully',
+        ]);
     }
 }
