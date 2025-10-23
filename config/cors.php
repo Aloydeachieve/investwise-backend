@@ -26,11 +26,13 @@ return [
         'https://investwise-frontend-8paj.vercel.app',
         'https://investwise-frontend-8paj-git-main-aloysius-dominics-projects.vercel.app',
         'https://investwise-frontend-8paj-mag8v2ryu-aloysius-dominics-projects.vercel.app',
+        'https://investwise-frontend-8paj-git-dev-aloysius-dominics-projects.vercel.app',
+        'https://investwise-frontend-8paj-jw01s3za5-aloysius-dominics-projects.vercel.app',
     ],
 
-    'allowed_origins_patterns' => [
-        '/\.vercel\.app$/',  // Allow all Vercel preview deployments
-    ],
+'allowed_origins_patterns' => [
+    '/^https:\/\/investwise-frontend-8paj-git-[a-z0-9-]+-aloysius-dominics-projects\.vercel\.app$/',
+],
 
     'allowed_headers' => [
         'Content-Type',
