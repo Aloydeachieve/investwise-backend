@@ -29,7 +29,7 @@ class HandleCors
       'https://investwise-frontend-8paj-git-main-aloysius-dominics-projects.vercel.app',
       'https://investwise-frontend-8paj-mag8v2ryu-aloysius-dominics-projects.vercel.app',
       'https://investwise-frontend-8paj-git-dev-aloysius-dominics-projects.vercel.app',
-      'https://investwise-frontend-8paj-jw01s3za5-aloysius-dominics-projects.vercel.app',
+      'https://investwise-frontend-8paj-jw01s3za5-aloysius-dominics-projects.vercel.app/',
     ];
 
     // Check if the origin is allowed 
