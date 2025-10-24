@@ -72,6 +72,14 @@ Route::middleware('auth:sanctum')->prefix('auth')->group(function () {
         Route::get('/users/{id}', [AuthController::class, 'getUserDetails']);
         Route::put('/users/{user}/verify', [AuthController::class, 'toggleVerification']);
 
+        // ✅ User Details (for admin panel)
+        Route::get('/users/{id}', [AuthController::class, 'getUserDetails']); // Personal tab
+        Route::get('/users/{id}/transactions', [AuthController::class, 'getUserTransactions']);
+        Route::get('/users/{id}/investments', [AuthController::class, 'getUserInvestments']);
+        Route::get('/users/{id}/referrals', [AuthController::class, 'getUserReferrals']);
+        Route::get('/users/{id}/activities', [AuthController::class, 'getUserActivities']);
+        Route::delete('/users/{id}/activities/{activityId}', [AuthController::class, 'deleteActivity']);
+        Route::delete('/users/{id}/activities/clear', [AuthController::class, 'clearAllActivities']);
     });
 });
 

@@ -20,6 +20,13 @@ use App\Models\KycSubmission;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Log;
 use App\Http\Resources\UserResource;
+use App\Http\Resources\TransactionResource;
+use App\Http\Resources\InvestmentResource;
+use App\Models\AuditLog; // Corrected: Use AuditLog instead of ActivityLog
+use App\Http\Resources\ReferralResource;
+use App\Http\Resources\ActivityResource;
+use App\Models\Transaction;
+use App\Models\Investment;
 
 
 
@@ -314,7 +321,7 @@ class AuthController extends Controller
     }
 
     // 🔹 Get User Details with Relationships
- public function getUserDetails($id)
+    public function getUserDetails($id)
     {
         try {
             // Eager load relationships for performance
@@ -338,7 +345,8 @@ class AuthController extends Controller
         }
     }
 
-    /**     * Admin: Update User Role
+    /**
+     * Admin: Update User Role
      */
     public function toggleVerification(User $user, Request $request): JsonResponse
     {
@@ -350,5 +358,73 @@ class AuthController extends Controller
             'success' => true,
             'message' => $request->verified ? 'User verified successfully' : 'User unverified successfully',
         ]);
+    }
+
+    /**
+     * Get all transactions for a user.
+     */
+    public function getUserTransactions($id)
+    {
+        $transactions = Transaction::where('user_id', $id)
+            ->latest()
+            ->get();
+
+        return ApiResponse::success(TransactionResource::collection($transactions), 'User transactions retrieved.');
+    }
+
+    /**
+     * Get all investments for a user.
+     */
+    public function getUserInvestments($id)
+    {
+        $investments = Investment::where('user_id', $id)
+            ->latest()
+            ->get();
+
+        return ApiResponse::success(InvestmentResource::collection($investments), 'User investments retrieved.');
+    }
+
+    /**
+     * Get all referrals made by a user.
+     */
+    public function getUserReferrals($id)
+    {
+        $user = User::findOrFail($id);
+        $referrals = $user->referralsMade()->with('referralUser')->get();
+
+        return ApiResponse::success(ReferralResource::collection($referrals), 'User referrals retrieved.');
+    }
+
+    /**
+     * Get all activities of a user.
+     */
+    public function getUserActivities($id)
+    {
+        $activities = AuditLog::where('user_id', $id)
+            ->latest()
+            ->get();
+
+        return ApiResponse::success(ActivityResource::collection($activities), 'User activity logs retrieved.');
+    }
+
+    /**
+     * Delete a single activity record.
+     */
+    public function deleteActivity($id, $activityId)
+    {
+        $activity = AuditLog::where('user_id', $id)->findOrFail($activityId);
+        $activity->delete();
+
+        return ApiResponse::success(null, 'Activity deleted successfully.');
+    }
+
+    /**
+     * Clear all activity logs for a user.
+     */
+    public function clearAllActivities($id)
+    {
+        AuditLog::where('user_id', $id)->delete();
+
+        return ApiResponse::success(null, 'All user activities cleared.');
     }
 }
